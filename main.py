@@ -6,7 +6,7 @@ from traffic_analyzer import TrafficAnalyzer
 from scapy.all import sniff, IP, TCP
 
 class IntrusionDetectionSystem:
-    def __init__(self,interface="eth0"):
+    def __init__(self,interface="Wi-Fi"):
         self.packet_capture = PacketCapture()
         self.traffic_analyzer = TrafficAnalyzer()
         self.detection_engine = DetectionEngine()

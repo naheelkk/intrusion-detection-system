@@ -25,6 +25,8 @@ class DetectionEngine:
 
     def train_anomaly_detector(self, normal_traffic_data):
         self.anomaly_detector.fit(normal_traffic_data)
+        
+        
 
     def detect_threats(self, features):
         threats = []
