@@ -1,44 +1,53 @@
 # Intrusion Detection System (IDS)
 
-A Python-based network intrusion detection system that monitors network traffic and identifies potential security threats using both signature-based and anomaly-based detection methods.
+A Python-based network intrusion detection system prototype that monitors network traffic and identifies potential security threats using both signature-based and anomaly-based detection methods.
 
-## Features
+## ⚠️ Important Disclaimers
 
-- **Real-time packet capture** using Scapy
-- **Signature-based detection** for known attack patterns (SYN flood, port scan)
-- **Anomaly detection** using machine learning (Isolation Forest)
-- **Traffic flow analysis** with packet and byte rate calculations
-- **Alert logging** with configurable severity levels
-- **Multi-threaded architecture** for concurrent packet processing
+This is a **proof-of-concept implementation** with significant limitations. It is intended for educational purposes and should not be used in production environments without substantial improvements.
 
-## Components
+## Features (Current Implementation)
 
-### Core Modules
+- **Basic packet capture** using Scapy (TCP packets only)
+- **Simple signature-based detection** for basic attack patterns
+- **Experimental anomaly detection** using Isolation Forest
+- **Basic traffic flow analysis** with packet and byte rate calculations
+- **Alert logging** to file and console
+- **Single-threaded architecture** with basic packet processing
 
-- **`main.py`** - Main orchestrator that coordinates all system components
-- **`packet_capture.py`** - Handles network packet capture using Scapy
-- **`traffic_analyzer.py`** - Analyzes packet flows and extracts network features
-- **`detection_engine.py`** - Implements threat detection using signatures and ML
-- **`alert_system.py`** - Manages alert generation and logging
+## Known Limitations
 
-### Detection Methods
+### Critical Issues
+- **Threading bug**: The packet capture threading implementation has a bug that may cause the capture thread to not start properly
+- **Interface dependency**: Hardcoded to "Wi-Fi" interface, may not work on all systems
+- **Error handling**: Minimal error handling for network issues or permission problems
+- **Single-threaded processing**: Despite claims of multi-threading, packet analysis runs in the main thread
+- **No packet reassembly**: Analyzes individual packets without considering connection state
 
-1. **Signature-based Detection**
-   - SYN flood detection (high SYN packet rate)
-   - Port scan detection (small packets at high rate)
+### Detection Limitations
+- **Basic signatures**: Only detects simple SYN flood and port scan patterns
+- **High false positives**: Anomaly detection threshold may trigger on normal traffic variations
+- **Training required**: Anomaly detection needs manual training data collection
+- **Limited protocol support**: Only handles TCP packets, ignores UDP and other protocols
+- **No rate limiting**: Signature detection may trigger on single packets rather than sustained attacks
 
-2. **Anomaly Detection**
-   - Uses Isolation Forest algorithm from scikit-learn
-   - Detects unusual traffic patterns based on packet size, packet rate, and byte rate
-   - Requires training on normal traffic data
+### Performance Issues
+- **Memory usage**: Flow statistics accumulate indefinitely without cleanup
+- **Blocking operations**: Uses blocking queue operations that may cause delays
+- **No optimization**: No performance optimizations for high-traffic environments
 
 ## Requirements
 
 ```
-scapy
-scikit-learn
-numpy
+scapy>=2.4.0
+scikit-learn>=1.0.0
+numpy>=1.20.0
 ```
+
+**System Requirements:**
+- Root/administrator privileges for packet capture
+- Compatible network interface (may need to change from "Wi-Fi" to your interface name)
+- Python 3.7+ recommended
 
 ## Installation
 
@@ -47,34 +56,36 @@ numpy
    ```bash
    pip install scapy scikit-learn numpy
    ```
-3. Run with appropriate privileges (packet capture requires root/admin):
+3. **Important**: Modify `main.py` to use your correct network interface name
+4. Run with appropriate privileges:
    ```bash
    sudo python main.py
    ```
 
 ## Usage
 
-### Basic Usage
+### Basic Usage (With Caveats)
 
 ```python
 from main import IntrusionDetectionSystem
 
-# Initialize IDS with default interface (eth0)
+# Note: Default interface is "Wi-Fi" - change this in main.py
 ids = IntrusionDetectionSystem()
-ids.start()
-
-# Or specify a different interface
-ids = IntrusionDetectionSystem(interface="wlan0")
-ids.start()
+ids.start()  # May have threading issues
 ```
 
 ### Training the Anomaly Detector
 
-Before using anomaly detection effectively, train the model with normal traffic:
+The anomaly detector requires training before meaningful detection:
 
 ```python
-# Collect normal traffic data
-normal_data = [[packet_size, packet_rate, byte_rate], ...]
+# Collect normal traffic data manually
+normal_data = [
+    [packet_size, packet_rate, byte_rate],
+    [100, 10, 1000],  # Example values
+    [150, 5, 750],
+    # ... more normal traffic samples needed
+]
 
 # Train the detector
 ids.detection_engine.train_anomaly_detector(normal_data)
@@ -82,21 +93,23 @@ ids.detection_engine.train_anomaly_detector(normal_data)
 
 ## Configuration
 
-### Alert Thresholds
+### Detection Thresholds (May Need Tuning)
 
-Modify detection thresholds in `detection_engine.py`:
-- Anomaly score threshold: `-0.5` (lower values = more anomalous)
+Current thresholds in `detection_engine.py`:
+- Anomaly score threshold: `-0.5` (very sensitive, may cause false positives)
 - High confidence alert threshold: `0.8`
+- SYN flood threshold: `>100 packets/second` (may be too low)
+- Port scan threshold: `<100 byte packets at >50/second`
 
-### Signature Rules
+### Adding Signature Rules
 
-Add new signature rules in `DetectionEngine.load_signature_rules()`:
+Basic example of adding rules in `DetectionEngine.load_signature_rules()`:
 
 ```python
-"new_rule": {
+"custom_rule": {
     "condition": lambda features: (
-        # Your detection logic here
-        features["some_feature"] > threshold
+        features["packet_size"] > 1500  # Large packet detection
+        and features["packet_rate"] > 10
     )
 }
 ```
@@ -105,10 +118,10 @@ Add new signature rules in `DetectionEngine.load_signature_rules()`:
 
 The system generates alerts in two formats:
 
-1. **Log file** (`ids_alerts.log`) - JSON formatted alerts with timestamps
-2. **Console output** - Critical alerts for high-confidence threats
+1. **Log file** (`ids_alerts.log`) - JSON formatted alerts
+2. **Console output** - High-confidence alerts only
 
-Example alert:
+Example alert structure:
 ```json
 {
   "timestamp": "2024-01-15T10:30:45.123456",
@@ -124,36 +137,64 @@ Example alert:
 }
 ```
 
-## Limitations
+## Testing
 
-- **Interface dependency**: Requires network interface access
-- **Training required**: Anomaly detection needs training on normal traffic
-- **Basic signatures**: Limited to simple attack patterns
-- **No packet reassembly**: Analyzes individual packets, not reconstructed flows
-- **Single-threaded analysis**: Traffic analysis runs in main thread
+A basic test script is provided (`test.py`) that simulates packet processing:
 
-## Architecture
+```bash
+python test.py
+```
+
+This runs offline tests with simulated packets rather than live traffic capture.
+
+## Current Architecture
 
 ```
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
 │  PacketCapture  │───▶│ TrafficAnalyzer  │───▶│ DetectionEngine │
+│   (TCP only)    │    │  (Basic stats)   │    │ (Simple rules)  │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
                                                          │
                                                          ▼
                                                ┌─────────────────┐
                                                │  AlertSystem    │
+                                               │ (File logging)  │
                                                └─────────────────┘
 ```
 
+## Recommendations for Improvement
+
+To make this system production-ready, consider:
+
+1. **Fix threading issues** in packet capture
+2. **Add proper error handling** for network operations
+3. **Implement connection state tracking** for better analysis
+4. **Add support for more protocols** (UDP, ICMP, etc.)
+5. **Improve signature rules** with more sophisticated detection logic
+6. **Add configuration file** for easy threshold adjustment
+7. **Implement proper flow cleanup** to prevent memory leaks
+8. **Add rate limiting** and traffic normalization
+9. **Include more comprehensive testing** with real attack scenarios
+10. **Add performance monitoring** and optimization
+
+## Educational Value
+
+This implementation demonstrates:
+- Basic network packet analysis concepts
+- Simple machine learning application to security
+- Event-driven architecture patterns
+- Python networking and threading (with caveats)
+
 ## Contributing
 
-To extend the system:
+If you'd like to improve this system:
 
-1. Add new signature rules in `DetectionEngine`
-2. Implement additional feature extraction in `TrafficAnalyzer`
-3. Enhance alert handling in `AlertSystem`
-4. Add new ML models for anomaly detection
+1. **Priority fixes**: Address the threading and error handling issues
+2. **Add features**: Implement missing protocol support
+3. **Improve detection**: Add more sophisticated signature rules
+4. **Performance**: Optimize for higher traffic volumes
+5. **Testing**: Add comprehensive unit and integration tests
 
 ## License
 
-This project is provided as-is for educational and research purposes.
+This project is provided as-is for educational and research purposes. Use at your own risk and do not deploy in production environments without significant modifications and testing.
